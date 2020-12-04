@@ -4,27 +4,27 @@
 
 #include "CoreMinimal.h"
 #include "Item.h"
-#include "Explosive.generated.h"
+#include "Potion.generated.h"
 
 /**
  * 
  */
 UCLASS()
-class PLEASE_API AExplosive : public AItem
+class PLEASE_API APotion : public AItem
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
-		float Damage;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Heal")
+		int32 HealAmount;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Widget")
 		TSubclassOf<UDamageType> DamageTypeClass;
 public:
-	AExplosive();
+	APotion();
+
 
 	virtual void OnOverlapBegin(UPrimitiveComponent* OverlappedComponent,
-			AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult & SweepResult) override;
+		AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult & SweepResult) override;
 
 	virtual void OnOverlapEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex) override;
-	
 };

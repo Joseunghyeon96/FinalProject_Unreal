@@ -10,6 +10,8 @@
 #include "Components/ProgressBar.h"
 #include "Blueprint/UserWidget.h"
 #include "Sound/SoundCue.h"
+#include "Kismet/KismetSystemLibrary.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "Components/WidgetComponent.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Kismet/GameplayStatics.h"
@@ -32,7 +34,7 @@ AEnemy::AEnemy()
 	CombatSphere->InitSphereRadius(100.f);
 
 	CombatCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("CombatCollision"));
-	CombatCollision->AttachToComponent(GetMesh(), FAttachmentTransformRules::SnapToTargetIncludingScale, FName("EnemySocket"));
+	CombatCollision->SetupAttachment(GetMesh(), FName("EnemySocket"));
 
 
 	bOverlappingCombatSphere = false;
@@ -46,10 +48,13 @@ AEnemy::AEnemy()
 	
 	DeathDelay = 3.0f;
 	Damage = 10.f;
+	AttackSpeed = 0.5f;
 
 	HPBarWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("HPBarWidget"));
 	HPBarWidget->SetupAttachment(GetMesh());
 	HPBarWidget->SetHiddenInGame(false);
+
+	bHasValidTarget = false;
 
 }
 
@@ -62,9 +67,12 @@ void AEnemy::BeginPlay()
 
 	DetectableSphere->OnComponentBeginOverlap.AddDynamic(this, &AEnemy::DectectableSphereOnOverlapBegin);
 	DetectableSphere->OnComponentEndOverlap.AddDynamic(this, &AEnemy::DectectableSphereOnOverlapEnd);
+	DetectableSphere->OnComponentEndOverlap.AddDynamic(this, &AEnemy::DectectableSphereOnOverlapEnd);
+	DetectableSphere->SetCollisionResponseToChannel(ECollisionChannel::ECC_WorldDynamic, ECollisionResponse::ECR_Ignore);
 
 	CombatSphere->OnComponentBeginOverlap.AddDynamic(this, &AEnemy::CombatSphereOnOverlapBegin);
 	CombatSphere->OnComponentEndOverlap.AddDynamic(this, &AEnemy::CombatSphereOnOverlapEnd);
+	CombatSphere-> SetCollisionResponseToChannel(ECollisionChannel::ECC_WorldDynamic, ECollisionResponse::ECR_Ignore);
 
 
 	CombatCollision->OnComponentBeginOverlap.AddDynamic(this, &AEnemy::CombatOnOverlapBegin);
@@ -92,7 +100,13 @@ void AEnemy::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	
+	if (MainTarget!= nullptr && !bAttacking)
+	{
+		FRotator lookAtRotation = UKismetMathLibrary::FindLookAtRotation(GetActorLocation(), MainTarget->GetActorLocation());
+		FRotator lookAtYaw(0.f, lookAtRotation.Yaw, 0.f);
+		FRotator interpRotation = FMath::RInterpTo(GetActorRotation(), lookAtYaw, DeltaTime, 25.f);
+		SetActorRotation(interpRotation);
+	}
 }
 
 // Called to bind functionality to input
@@ -114,7 +128,9 @@ void AEnemy::DectectableSphereOnOverlapBegin(UPrimitiveComponent * OverlappedCom
 		if (main) {
 			bVisibleHealthBar = true;
 			HPBarWidget->SetHiddenInGame(false);
+			if (main->MS == EMovementStatus::EMS_Dead) return;
 			SetEnemyMovementStatus(EEnemyMovementStatus::EMS_MoveToTarget);
+			CombatTarget = main;
 			MoveToTarget(main);
 		}
 	}
@@ -129,8 +145,10 @@ void AEnemy::DectectableSphereOnOverlapEnd(UPrimitiveComponent * OverlappedCompo
 		AMain* main = Cast<AMain>(OtherActor);
 
 		if (main) {
+			bHasValidTarget = false;
 			bVisibleHealthBar = false;
 			HPBarWidget->SetHiddenInGame(true);
+			CombatTarget = nullptr;
 			SetEnemyMovementStatus(EEnemyMovementStatus::EMS_Idle);
 			if (AIController)
 			{
@@ -151,8 +169,10 @@ void AEnemy::CombatSphereOnOverlapBegin(UPrimitiveComponent * OverlappedComponen
 
 
 		if (main) {
+			if (main->MS == EMovementStatus::EMS_Dead) return;
+			MainTarget = main;
+			bHasValidTarget = true;
 			main->SetCombatTarget(this);
-			CombatTarget = main;
 			bOverlappingCombatSphere = true;
 			Attack();
 		}
@@ -168,13 +188,13 @@ void AEnemy::CombatSphereOnOverlapEnd(UPrimitiveComponent * OverlappedComponent,
 		AMain* main = Cast<AMain>(OtherActor);
 
 		if (main) {
+			MainTarget = nullptr;
 			bOverlappingCombatSphere = false;
 			if(main->CombatTarget == this)
 				main->SetCombatTarget(nullptr);
 
 			if (EnemyMovementStatus != EEnemyMovementStatus::EMS_Attacking)
 			{
-				CombatTarget = nullptr;
 				MoveToTarget(main);
 			}
 			GetWorldTimerManager().ClearTimer(AttackTimer);
@@ -197,7 +217,7 @@ void AEnemy::CombatOnOverlapBegin(UPrimitiveComponent * OverlappedComponent, AAc
 			}
 			if (DamageTypeClass)
 			{
-				UGameplayStatics::ApplyDamage(main, -Damage, AIController, this, DamageTypeClass);
+				UGameplayStatics::ApplyDamage(main, Damage, AIController, this, DamageTypeClass);
 			}
 		}
 	}
@@ -210,10 +230,21 @@ void AEnemy::CombatOnOverlapEnd(UPrimitiveComponent * OverlappedComponent, AActo
 
 float AEnemy::TakeDamage(float DamageAmount, FDamageEvent const & DamageEvent, AController * EventInstigator, AActor * DamageCauser)
 {
-	Health += DamageAmount;
+	Health -= DamageAmount;
 	HPBar->SetPercent(Health / MaxHealth);
 	if (Health <= 0.f)
+	{
 		Die();
+
+		AMain* main = Cast<AMain>(DamageCauser);
+		if (main)
+		{
+			if (main->CombatTarget == this)
+			{
+				main->SetCombatTarget(nullptr);
+			}
+		}
+	}
 
 	return DamageAmount;
 }
@@ -259,7 +290,7 @@ void AEnemy::Die()
 
 void AEnemy::Attack()
 {
-	if (!IsAlive()) return;
+	if (!IsAlive() || !bHasValidTarget) return;
 
 	if (AIController)
 	{
@@ -270,16 +301,14 @@ void AEnemy::Attack()
 	if (!bAttacking)
 	{
 		bAttacking = true;
+
+
 		UAnimInstance* animInstance = GetMesh()->GetAnimInstance();
 		if (animInstance)
 		{
-			animInstance->Montage_Play(CombatMontage, 1.3f);
+			animInstance->Montage_Play(CombatMontage, AttackSpeed);
 			animInstance->Montage_JumpToSection(FName("Attack1"), CombatMontage);
 			
-		}
-		if (AttackSound)
-		{
-			UGameplayStatics::PlaySound2D(this, AttackSound);
 		}
 	}
 }
@@ -292,6 +321,11 @@ void AEnemy::AttackEnd()
 	{
 		float attackTime = FMath::FRandRange(AttackMinTime, AttackMaxTime);
 		GetWorldTimerManager().SetTimer(AttackTimer, this, &AEnemy::Attack, attackTime);
+	}
+	else
+	{
+		if(CombatTarget)
+		MoveToTarget(CombatTarget);
 	}
 }
 
@@ -316,6 +350,10 @@ bool AEnemy::IsAlive()
 void AEnemy::ActivateCollision()
 {
 	CombatCollision->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	if (AttackSound)
+	{
+		UGameplayStatics::PlaySound2D(this, AttackSound);
+	}
 }
 
 void AEnemy::DeactivateCollision()

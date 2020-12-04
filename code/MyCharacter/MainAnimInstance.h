@@ -27,6 +27,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Movement)
 	bool bIsInAir;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Combat)
+	bool bCanComboAttack;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Combat)
+		int32 CurrentCombo;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Combat)
+		int32 MaxCombo;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Movement)
 	class APawn* Pawn;
 

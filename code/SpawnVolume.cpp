@@ -20,6 +20,19 @@ ASpawnVolume::ASpawnVolume()
 void ASpawnVolume::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (Actor_1)
+		SpawnArray.Add(Actor_1);
+
+	if (Actor_2)
+		SpawnArray.Add(Actor_2);
+
+	if (Actor_3)
+		SpawnArray.Add(Actor_3);
+
+	if (Actor_4)
+		SpawnArray.Add(Actor_4);
+
 	
 }
 
@@ -40,7 +53,18 @@ FVector ASpawnVolume::GetSpawnPoint()
 	return point;
 }
 
-void ASpawnVolume::SpawnOurPawn_Implementation(UClass* ToSpawn, const FVector & Location)
+TSubclassOf<AActor> ASpawnVolume::GetSpawnActor()
+{
+	if (SpawnArray.Num() > 0)
+	{
+		int32 selection = FMath::RandRange(0, SpawnArray.Num() - 1);
+
+		return SpawnArray[selection];
+	}
+	return nullptr;
+}
+
+void ASpawnVolume::SpawnOurActor_Implementation(UClass* ToSpawn, const FVector & Location)
 {
 	if (!ToSpawn)return;
 
@@ -48,7 +72,7 @@ void ASpawnVolume::SpawnOurPawn_Implementation(UClass* ToSpawn, const FVector & 
 	if (!world) return;
 
 	FActorSpawnParameters spawnParams;
-	ACritter* critterSpawned = world->SpawnActor<ACritter>(ToSpawn, Location, FRotator(0.f), spawnParams);
+	world->SpawnActor<AActor>(ToSpawn, Location, FRotator(0.f), spawnParams);
 
 }
 

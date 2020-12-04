@@ -57,6 +57,11 @@ AMain::AMain()
 	MaxHealth = 100.f;
 	CurrentHealth = 65.f;
 
+	CurrentCombo = 1;
+	MaxCombo = 2;
+	bComboCheck = false;
+	bCanComboAttack = false;
+
 	MaxStamina = 200.f;
 	CurrentStamina = 100.f;
 
@@ -89,6 +94,8 @@ void AMain::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	if (MS == EMovementStatus::EMS_Dead) return;
+
 	TickStamina(DeltaTime);
 
 	if (bInterpToEnemy && CombatTarget)
@@ -114,6 +121,7 @@ void AMain::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &AMain::Jump);
 	PlayerInputComponent->BindAction("Jump", IE_Released, this, &AMain::StopJumping);
 	PlayerInputComponent->BindAction("EquipWeapon", IE_Pressed, this, &AMain::PressKeyF);
+	PlayerInputComponent->BindAction("LMB", IE_Pressed, this, &AMain::ComboAttack);
 	PlayerInputComponent->BindAction("LMB", IE_Pressed, this, &AMain::Attack);
 	//PlayerInputComponent->BindAction("UnEquipWeapon", IE_Pressed, this, &AMain::PressKeyG);
 	PlayerInputComponent->BindAction("Sprint", IE_Pressed, this, &AMain::SetSprinting);
@@ -127,7 +135,7 @@ void AMain::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 
 void AMain::MoveForward(float value)
 {
-	if ((Controller == nullptr) || (value == 0.f) || bAttacking)
+	if ((Controller == nullptr) || (value == 0.f) || bAttacking || MS == EMovementStatus::EMS_Dead)
 		return;
 
 	// Fine out which way is forward
@@ -144,7 +152,7 @@ void AMain::MoveForward(float value)
 
 void AMain::MoveRight(float value)
 {
-	if ((Controller == nullptr) || (value == 0.f) || MS == EMovementStatus::EMS_Exhausted || bAttacking)
+	if ((Controller == nullptr) || (value == 0.f) || MS == EMovementStatus::EMS_Exhausted || bAttacking || MS == EMovementStatus::EMS_Dead)
 		return;
 
 	// Fine out which way is forward
@@ -157,14 +165,14 @@ void AMain::MoveRight(float value)
 
 void AMain::Jump()
 {
-	if (MS == EMovementStatus::EMS_Exhausted || bAttacking) return;
+	if (MS == EMovementStatus::EMS_Exhausted || bAttacking || MS == EMovementStatus::EMS_Dead) return;
 
 	ACharacter::Jump();
 }
 
 void AMain::StopJumping()
 {
-	if (MS == EMovementStatus::EMS_Exhausted || bAttacking) return;
+	if (MS == EMovementStatus::EMS_Exhausted || bAttacking || MS == EMovementStatus::EMS_Dead) return;
 	
 	ACharacter::StopJumping();
 }
@@ -179,15 +187,6 @@ void AMain::LookUpRate(float rate)
 	AddControllerPitchInput(rate * BaseLookUpRate * GetWorld()->GetDeltaSeconds());
 }
 
-void AMain::VariationHealth(float Amount)
-{
-	CurrentHealth += Amount;
-	if (Amount < 0)
-		UGameplayStatics::PlaySound2D(this, HitSound);
-
-	if (CurrentHealth <= 0) Die();
-}
-
 void AMain::VariationCoin(int32 Amount)
 {
 	Coins += Amount;
@@ -195,12 +194,15 @@ void AMain::VariationCoin(int32 Amount)
 
 void AMain::Die()
 {
+	if (MS == EMovementStatus::EMS_Dead) return;
+
 	UAnimInstance* animInstance = GetMesh()->GetAnimInstance();
 	if (animInstance && CombatMontage)
 	{
-		animInstance->Montage_Play(CombatMontage, 1.0f);
+		animInstance->Montage_Play(CombatMontage, 2.0f);
 		animInstance->Montage_JumpToSection(FName("Death"),CombatMontage);
 	}
+	SetMovementStatus(EMovementStatus::EMS_Dead);
 }
 
 void AMain::TickStamina(float DeltaTime)
@@ -288,19 +290,19 @@ void AMain::SetMovementStatus(EMovementStatus Input)
 
 void AMain::SetSprinting()
 {
-	if(bCanSprint && MS != EMovementStatus::EMS_Exhausted)
+	if(bCanSprint && MS != EMovementStatus::EMS_Exhausted && MS != EMovementStatus::EMS_Dead)
 	SetMovementStatus(EMovementStatus::EMS_Sprinting);
 }
 
 void AMain::SetRunning()
 {
-	if(MS != EMovementStatus::EMS_Exhausted)
+	if(MS != EMovementStatus::EMS_Exhausted && MS != EMovementStatus::EMS_Dead)
 	SetMovementStatus(EMovementStatus::EMS_Normal);
 }
 
 void AMain::PressKeyF()
 {
-	if (!ActiveOverlappingItem) return;
+	if (!ActiveOverlappingItem || MS == EMovementStatus::EMS_Dead) return;
 
 	AWeapon* weapon = Cast<AWeapon>(ActiveOverlappingItem);
 	if (weapon)
@@ -333,15 +335,17 @@ FRotator AMain::GetLookAtRotationYaw(FVector TargetLocation)
 
 void AMain::Attack()
 {
-	if (!EquippedWeapon || bAttacking) return;
+	if (!EquippedWeapon || bAttacking || MS == EMovementStatus::EMS_Dead) return;
 
 	SetInterpToEnemy(true);
 	bAttacking = true;
+	bComboCheck = false;
+	bCanComboAttack = false;
 	UAnimInstance* animInstance = GetMesh()->GetAnimInstance();
 	if (animInstance && CombatMontage)
 	{
 		animInstance->Montage_Play(CombatMontage,2.0f);
-		animInstance->Montage_JumpToSection(FName("Attack_1"), CombatMontage);
+		animInstance->Montage_JumpToSection(FName(*FString::Printf(TEXT("Attack_%d"),CurrentCombo)), CombatMontage);
 	}
 	if (EquippedWeapon->SwingSound)
 	{
@@ -349,10 +353,47 @@ void AMain::Attack()
 	}
 }
 
+void AMain::ComboAttack()
+{
+	if (!bAttacking || !bComboCheck) return;
+
+	UE_LOG(LogTemp, Warning, TEXT("ComboAttack func"));
+	bCanComboAttack = true;
+
+
+}
+
+void AMain::ComboCheck()
+{
+	bComboCheck = true;
+}
+
 void AMain::AttackEnd()
 {
-	bAttacking = false;
-	SetInterpToEnemy(false);
+	try {
+		if (!bCanComboAttack || CurrentCombo == MaxCombo) throw 1;
+
+		CurrentCombo++;
+		bAttacking = false;
+		Attack();
+		return;
+	}
+	catch(int error)
+	{
+		if (error < 0) return;
+		bAttacking = false;
+		SetInterpToEnemy(false);
+		bComboCheck = false;
+		bCanComboAttack = false;
+		CurrentCombo = 1;
+
+	}
+}
+
+void AMain::DeathEnd()
+{
+	GetMesh()->bPauseAnims = true;
+	GetMesh()->bNoSkeletonUpdate = true;
 
 }
 
@@ -361,9 +402,45 @@ void AMain::SetInterpToEnemy(bool Interp)
 	bInterpToEnemy = Interp;
 }
 
+void AMain::SimpleTakeDamage(float DamageAmount)
+{
+	CurrentHealth -= DamageAmount;
+	if (DamageAmount > 0)
+		UGameplayStatics::PlaySound2D(this, HitSound);
+
+	if (CurrentHealth <= 0) {
+		Die();
+	}
+}
+
 float AMain::TakeDamage(float DamageAmount, FDamageEvent const & DamageEvent, AController * EventInstigator, AActor * DamageCauser)
 {
-	VariationHealth(DamageAmount);
+	
+	CurrentHealth -= DamageAmount;
+
+	if (DamageAmount > 0)
+	{
+		if (DamageAmount > 0)
+			UGameplayStatics::PlaySound2D(this, HitSound);
+
+		if (CurrentHealth <= 0) {
+			Die();
+			AEnemy* enemy = Cast<AEnemy>(DamageCauser);
+			if (enemy)
+			{
+				enemy->bHasValidTarget = false;
+			}
+		}
+	}
+	else if (DamageAmount < 0)
+	{
+		if (CurrentHealth > MaxHealth)
+			CurrentHealth = MaxHealth;
+
+		UGameplayStatics::PlaySound2D(this, HealSound);
+		//UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), HealParticles, GetActorLocation(), FRotator(0.f), true);
+		UGameplayStatics::SpawnEmitterAttached(HealParticles, GetMesh(), "ParticleSocket");
+	}
 
 	return DamageAmount;
 }

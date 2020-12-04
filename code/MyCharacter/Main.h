@@ -37,6 +37,19 @@ public:
 	// Sets default values for this character's properties
 	AMain();
 
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Combat)
+		bool bCanComboAttack;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Combat)
+		bool bComboCheck;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Combat)
+		int32 CurrentCombo;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Combat)
+		int32 MaxCombo;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Items)
 	class AWeapon* EquippedWeapon;
 
@@ -102,8 +115,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Particles")
 	class UParticleSystem* HitParticles;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Particles")
+	class UParticleSystem* HealParticles;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
 	class USoundCue* HitSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
+	class USoundCue* HealSound;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Player Stats")
 	int32 Coins;
@@ -151,9 +170,6 @@ public:
 	void LookUpRate(float rate);
 
 	UFUNCTION()
-		void VariationHealth(float Amount);
-
-	UFUNCTION()
 		void VariationCoin(int32 Amount);
 
 	UFUNCTION()
@@ -171,11 +187,20 @@ public:
 	FRotator GetLookAtRotationYaw(FVector TargetLocation);
 
 	void Attack();
+	void ComboAttack();
+
+	UFUNCTION(BlueprintCallable)
+	void ComboCheck();
+
 	UFUNCTION(BlueprintCallable)
 	void AttackEnd();
 
+	UFUNCTION(BlueprintCallable)
+	void DeathEnd();
+
 	void SetInterpToEnemy(bool Interp);
 
+	void SimpleTakeDamage(float DamageAmount);
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const & DamageEvent, class AController * EventInstigator, AActor * DamageCauser) override;
 
 	FORCEINLINE void SetStaminaStatus(EStaminaStatus Input) { ESS = Input; }

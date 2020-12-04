@@ -27,6 +27,8 @@ public:
 	// Sets default values for this character's properties
 	AEnemy();
 	
+	bool bHasValidTarget;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement")
 	EEnemyMovementStatus EnemyMovementStatus;
 
@@ -60,6 +62,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Status")
 	float Damage;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Status")
+	float AttackSpeed;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Particles")
 	class UParticleSystem* HitParticles;
 
@@ -72,6 +77,9 @@ public:
 	FTimerHandle AttackTimer;
 
 	FTimerHandle DeathTimer;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Combat")
+	class AMain* MainTarget;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float DeathDelay;

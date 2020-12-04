@@ -56,9 +56,6 @@ void AItem::OnOverlapBegin(UPrimitiveComponent * OverlappedComponent, AActor * O
 
 	if (!OtherActor) return;
 
-	AMain* main = Cast<AMain>(OtherActor);
-	if (!main) return;
-
 	if (OverlapParticles)
 	{
 		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), OverlapParticles, GetActorLocation(), FRotator(0.f), true);
@@ -73,7 +70,7 @@ void AItem::OnOverlapBegin(UPrimitiveComponent * OverlappedComponent, AActor * O
 void AItem::OnOverlapEnd(UPrimitiveComponent * OverlappedComponent, AActor * OtherActor, UPrimitiveComponent * OtherComp, int32 OtherBodyIndex)
 {
 	if (!OverlapParticles) {
-		UE_LOG(LogTemp, Warning, TEXT("Super::Overlap particles null"));
+		//UE_LOG(LogTemp, Warning, TEXT("Super::Overlap particles null"));
 		return;
 	}
 }

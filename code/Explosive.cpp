@@ -3,6 +3,8 @@
 
 #include "Explosive.h"
 #include "MyCharacter/Main.h"
+#include "Enemy.h"
+#include "Kismet/GameplayStatics.h"
 
 AExplosive::AExplosive()
 {
@@ -11,15 +13,15 @@ AExplosive::AExplosive()
 
 void AExplosive::OnOverlapBegin(UPrimitiveComponent * OverlappedComponent, AActor * OtherActor, UPrimitiveComponent * OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult & SweepResult)
 {
-	Super::OnOverlapBegin(OverlappedComponent, OtherActor, OtherComp, OtherBodyIndex, bFromSweep, SweepResult);
-
-	UE_LOG(LogTemp, Warning, TEXT("Explosive Overlap begin func"));
+	
 	if (!OtherActor) return;
 
 	AMain* main = Cast<AMain>(OtherActor);
-	if (!main) return;
+	AEnemy* enemy = Cast<AEnemy>(OtherActor);
+	if (!main && !enemy) return;
 
-	main->VariationHealth(-Damage);
+	Super::OnOverlapBegin(OverlappedComponent, OtherActor, OtherComp, OtherBodyIndex, bFromSweep, SweepResult);
+	UGameplayStatics::ApplyDamage(OtherActor, Damage, nullptr, this, DamageTypeClass);
 	Destroy();
 
 }
@@ -28,5 +30,4 @@ void AExplosive::OnOverlapEnd(UPrimitiveComponent * OverlappedComponent, AActor 
 {
 	Super::OnOverlapEnd(OverlappedComponent, OtherActor, OtherComp, OtherBodyIndex);
 
-	UE_LOG(LogTemp, Warning, TEXT("Explosive Overlap end func"));
 }

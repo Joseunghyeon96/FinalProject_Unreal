@@ -87,7 +87,7 @@ void AWeapon::CombatOnOverlapBegin(UPrimitiveComponent * OverlappedComponent, AA
 			}
 			if (DamageTypeClass)
 			{
-				UGameplayStatics::ApplyDamage(enemy, -Damage, WeaponInstigator, this, DamageTypeClass);
+				UGameplayStatics::ApplyDamage(enemy, Damage, WeaponInstigator, this, DamageTypeClass);
 			}
 		}
 	}
