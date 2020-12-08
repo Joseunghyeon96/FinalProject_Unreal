@@ -42,6 +42,12 @@ public:
 		bool bCanComboAttack;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Combat)
+		bool bDash;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Combat)
+		bool bCanDash;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Combat)
 		bool bComboCheck;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Combat)
@@ -55,6 +61,8 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Items)
 	class AItem* ActiveOverlappingItem;
+
+	
 
 	// Movement Status
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite , Category = "Enums")
@@ -92,7 +100,7 @@ public:
 	float SprintingSpeed;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement")
-		bool bCanSprint;
+	bool bCanSprint;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Anims")
 	bool bAttacking;
@@ -124,6 +132,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
 	class USoundCue* HealSound;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
+	class USoundCue* DashSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
+		class USoundCue* DeathSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
+		class USoundCue* JumpSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
+		class USoundCue* AttackSound;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Player Stats")
 	int32 Coins;
 
@@ -138,7 +158,21 @@ public:
 
 	float InterpSpeed;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Combat")
+	FVector DashLocation;
+
 	bool bInterpToEnemy;
+
+	FTimerHandle DashHandle;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Combat")
+	bool bDashCheck;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Combat")
+	bool bIsFMoved;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Combat")
+	bool bIsRMoved;
 
 
 protected:
@@ -148,23 +182,19 @@ protected:
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
-
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
-
 	// Called for forward or backward input
 	void MoveForward(float value);
-
 	// Called for side input
 	void MoveRight(float value);
-
+	void SetSprintRun(float value);
 	virtual void Jump() override;
 	virtual void StopJumping() override;
 
 	// Called via input to turn at a given rate
 	// @param rate This is a normalized rate, i.e. 1.0 means 100% of desired turn rate
 	void TurnAtRate(float rate);
-
 	// Called via input to look up/down at a given rate
 	// @param rate This is a normalized rate, i.e. 1.0 means 100% of desired look up/down rate
 	void LookUpRate(float rate);
@@ -177,15 +207,14 @@ public:
 
 	void TickStamina(float DeltaTime);
 	void SetMovementStatus(EMovementStatus Input);
-
 	void SetSprinting();
 	void SetRunning();
 
+	UFUNCTION(BlueprintCallable)
 	void PressKeyF();
+
 	void PressKeyG();
-
 	FRotator GetLookAtRotationYaw(FVector TargetLocation);
-
 	void Attack();
 	void ComboAttack();
 
@@ -196,15 +225,28 @@ public:
 	void AttackEnd();
 
 	UFUNCTION(BlueprintCallable)
+	void DashEnd();
+
+	UFUNCTION(BlueprintCallable)
 	void DeathEnd();
 
+	void DashCheck1();
+	void DashCheck2();
+	UFUNCTION()
+	void Dash();
 	void SetInterpToEnemy(bool Interp);
-
 	void SimpleTakeDamage(float DamageAmount);
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const & DamageEvent, class AController * EventInstigator, AActor * DamageCauser) override;
+	void SwitchLevel(FName LevelName);
+	
+	UFUNCTION(BlueprintCallable)
+	void SaveGame();
+	UFUNCTION(BlueprintCallable)
+	void LoadGame(bool SetPosition);
 
 	FORCEINLINE void SetStaminaStatus(EStaminaStatus Input) { ESS = Input; }
 	FORCEINLINE void SetCombatTarget(AEnemy* Target) { CombatTarget = Target; }
+	FORCEINLINE bool GetDash() { return bDash; }
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 	FORCEINLINE void SetEquippedWeapon(AWeapon* WeaponToSet) { EquippedWeapon = WeaponToSet; }

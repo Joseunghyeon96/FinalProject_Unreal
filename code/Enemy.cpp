@@ -211,6 +211,10 @@ void AEnemy::CombatOnOverlapBegin(UPrimitiveComponent * OverlappedComponent, AAc
 		AMain* main = Cast<AMain>(OtherActor);
 
 		if (main) {
+			if (main->GetDash())
+				return;
+
+
 			if (main->HitParticles)
 			{
 				UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), main->HitParticles, OtherComp->GetComponentLocation(), FRotator(0.f), false);

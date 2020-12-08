@@ -5,6 +5,8 @@
 #include "Components/BoxComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Engine/World.h"
+#include "AIController.h"
+#include "Enemy.h"
 #include "MyPawns/Critter.h"
 
 // Sets default values
@@ -58,6 +60,7 @@ TSubclassOf<AActor> ASpawnVolume::GetSpawnActor()
 	if (SpawnArray.Num() > 0)
 	{
 		int32 selection = FMath::RandRange(0, SpawnArray.Num() - 1);
+		UE_LOG(LogTemp, Warning, TEXT("selection : %d"),selection);
 
 		return SpawnArray[selection];
 	}
@@ -72,7 +75,21 @@ void ASpawnVolume::SpawnOurActor_Implementation(UClass* ToSpawn, const FVector &
 	if (!world) return;
 
 	FActorSpawnParameters spawnParams;
-	world->SpawnActor<AActor>(ToSpawn, Location, FRotator(0.f), spawnParams);
+	AActor* actor = world->SpawnActor<AActor>(ToSpawn, Location, FRotator(0.f), spawnParams);
+	
+	AEnemy* enemy = Cast<AEnemy>(actor);
+
+	if (enemy)
+	{
+		enemy->SpawnDefaultController();
+
+		AAIController* aiCont = Cast<AAIController>(enemy->GetController());
+
+		if (aiCont)
+		{
+			enemy->AIController = aiCont;
+		}
+	}
 
 }
 

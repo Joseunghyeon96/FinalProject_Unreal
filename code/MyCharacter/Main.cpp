@@ -13,6 +13,8 @@
 #include "../Enemy.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Weapon.h"
+#include "../MySaveGame.h"
+#include "UObject/WeakObjectPtrTemplates.h"
 #include "Animation/AnimInstance.h"
 #include "MainPlayerController.h"
 
@@ -74,6 +76,11 @@ AMain::AMain()
 	bCanSprint = true;
 	StaminaDrainRate = 25.f;
 	MinSprintStamina = 100.f;
+	bCanDash = true;
+	bDash = false;
+	bIsFMoved = false;
+	bIsRMoved = false;
+	bDashCheck = false;
 
 	InterpSpeed = 15.f;
 	bInterpToEnemy = false;
@@ -105,6 +112,11 @@ void AMain::Tick(float DeltaTime)
 		SetActorRotation(interpRotation);
 	}
 
+	if (bDash)
+	{
+		SetActorLocation(FMath::VInterpTo(GetActorLocation(), DashLocation, DeltaTime, 5.0f));
+	}
+
 
 }
 
@@ -124,20 +136,28 @@ void AMain::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 	PlayerInputComponent->BindAction("LMB", IE_Pressed, this, &AMain::ComboAttack);
 	PlayerInputComponent->BindAction("LMB", IE_Pressed, this, &AMain::Attack);
 	//PlayerInputComponent->BindAction("UnEquipWeapon", IE_Pressed, this, &AMain::PressKeyG);
-	PlayerInputComponent->BindAction("Sprint", IE_Pressed, this, &AMain::SetSprinting);
-	PlayerInputComponent->BindAction("Sprint", IE_Released, this, &AMain::SetRunning);
+	PlayerInputComponent->BindAction("Dash", IE_Pressed, this, &AMain::DashCheck1);
+	PlayerInputComponent->BindAction("Dash", IE_Released, this, &AMain::Dash);
 	PlayerInputComponent->BindAxis("MoveForward", this, &AMain::MoveForward);
 	PlayerInputComponent->BindAxis("MoveRight", this, &AMain::MoveRight);
 	PlayerInputComponent->BindAxis("TurnRate", this, &AMain::TurnAtRate);
 	PlayerInputComponent->BindAxis("LookUpRate", this, &AMain::LookUpRate);
+	PlayerInputComponent->BindAxis("Sprint", this, &AMain::SetSprintRun);
 
 }
 
 void AMain::MoveForward(float value)
 {
-	if ((Controller == nullptr) || (value == 0.f) || bAttacking || MS == EMovementStatus::EMS_Dead)
+	if ((Controller == nullptr) || (value == 0.f) || MS == EMovementStatus::EMS_Dead)
+	{
+		bIsFMoved = false;
 		return;
-
+	}
+	if (bAttacking)
+	{
+		bIsFMoved = true;
+		return;
+	}
 	// Fine out which way is forward
 	if (MS != EMovementStatus::EMS_Exhausted)
 	{
@@ -145,6 +165,7 @@ void AMain::MoveForward(float value)
 		const FRotator YawRotation(0.f, Rotation.Yaw, 0.f);
 
 		const FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+		bIsFMoved = true;
 		AddMovementInput(Direction, value);
 	}
 }
@@ -152,15 +173,31 @@ void AMain::MoveForward(float value)
 
 void AMain::MoveRight(float value)
 {
-	if ((Controller == nullptr) || (value == 0.f) || MS == EMovementStatus::EMS_Exhausted || bAttacking || MS == EMovementStatus::EMS_Dead)
+	if ((Controller == nullptr) || (value == 0.f) || MS == EMovementStatus::EMS_Exhausted || MS == EMovementStatus::EMS_Dead)
+	{
+		bIsRMoved = false;
 		return;
-
+	}
+	if (bAttacking)
+	{
+		bIsRMoved = true;
+		return;
+	}
 	// Fine out which way is forward
 	const FRotator Rotation = Controller->GetControlRotation();
 	const FRotator YawRotation(0.f, Rotation.Yaw, 0.f);
 
 	const FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+	bIsRMoved = true;
 	AddMovementInput(Direction, value);
+}
+
+void AMain::SetSprintRun(float value)
+{
+	if (value == 0)
+		SetRunning();
+	else
+		SetSprinting();
 }
 
 void AMain::Jump()
@@ -168,12 +205,14 @@ void AMain::Jump()
 	if (MS == EMovementStatus::EMS_Exhausted || bAttacking || MS == EMovementStatus::EMS_Dead) return;
 
 	ACharacter::Jump();
+	UGameplayStatics::PlaySound2D(this, JumpSound);
 }
 
 void AMain::StopJumping()
 {
 	if (MS == EMovementStatus::EMS_Exhausted || bAttacking || MS == EMovementStatus::EMS_Dead) return;
 	
+	UE_LOG(LogTemp, Warning, TEXT("SJ func"));
 	ACharacter::StopJumping();
 }
 
@@ -202,6 +241,7 @@ void AMain::Die()
 		animInstance->Montage_Play(CombatMontage, 2.0f);
 		animInstance->Montage_JumpToSection(FName("Death"),CombatMontage);
 	}
+	UGameplayStatics::PlaySound2D(this, DeathSound);
 	SetMovementStatus(EMovementStatus::EMS_Dead);
 }
 
@@ -335,7 +375,9 @@ FRotator AMain::GetLookAtRotationYaw(FVector TargetLocation)
 
 void AMain::Attack()
 {
-	if (!EquippedWeapon || bAttacking || MS == EMovementStatus::EMS_Dead) return;
+	if (!EquippedWeapon || bAttacking || MS == EMovementStatus::EMS_Dead || bDash) return;
+
+	if (!IsValid(CombatTarget)) CombatTarget = nullptr;
 
 	SetInterpToEnemy(true);
 	bAttacking = true;
@@ -347,10 +389,7 @@ void AMain::Attack()
 		animInstance->Montage_Play(CombatMontage,2.0f);
 		animInstance->Montage_JumpToSection(FName(*FString::Printf(TEXT("Attack_%d"),CurrentCombo)), CombatMontage);
 	}
-	if (EquippedWeapon->SwingSound)
-	{
-		//UGameplayStatics::PlaySound2D(this, EquippedWeapon->SwingSound);
-	}
+	UGameplayStatics::PlaySound2D(this, AttackSound);
 }
 
 void AMain::ComboAttack()
@@ -390,11 +429,65 @@ void AMain::AttackEnd()
 	}
 }
 
+void AMain::DashEnd()
+{
+	bCanComboAttack = false;
+	if (MS == EMovementStatus::EMS_Sprinting)
+		GetCharacterMovement()->MaxWalkSpeed = SprintingSpeed;
+	else if (MS == EMovementStatus::EMS_Normal)
+		GetCharacterMovement()->MaxWalkSpeed = RunningSpeed;
+	else
+		GetCharacterMovement()->MaxWalkSpeed = 0.f;
+
+
+	bCanDash = true;
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+	bDash = false;
+	AttackEnd();
+
+}
+
 void AMain::DeathEnd()
 {
 	GetMesh()->bPauseAnims = true;
 	GetMesh()->bNoSkeletonUpdate = true;
 
+}
+
+void AMain::DashCheck1()
+{
+	bDashCheck = true;
+	GetWorldTimerManager().SetTimer(DashHandle, this, &AMain::DashCheck2, 0.5f);
+}
+
+void AMain::DashCheck2()
+{
+	bDashCheck = false;
+}
+
+void AMain::Dash()
+{
+	if (CurrentStamina < 50 || !bCanDash || MS == EMovementStatus::EMS_Dead || (!bIsFMoved && !bIsRMoved) || !bDashCheck)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("noooo dash"));
+		return;
+	}
+
+	bCanDash = false;
+	CurrentStamina -= 50;
+	bDash = true;
+	GetCharacterMovement()->MaxWalkSpeed = 0.f;
+	UGameplayStatics::PlaySound2D(this, DashSound);
+	GetCharacterMovement()->bOrientRotationToMovement = false;
+	// Fine out which way is forward
+	const FVector Direction = GetActorForwardVector();//FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+	DashLocation = GetActorLocation() + (Direction * 500.f);
+	UAnimInstance* animInstance = GetMesh()->GetAnimInstance();
+	if (animInstance && CombatMontage)
+	{
+		animInstance->Montage_Play(CombatMontage, 1.2f);
+		animInstance->Montage_JumpToSection(FName(TEXT("Dash")), CombatMontage);
+	}
 }
 
 void AMain::SetInterpToEnemy(bool Interp)
@@ -420,9 +513,11 @@ float AMain::TakeDamage(float DamageAmount, FDamageEvent const & DamageEvent, AC
 
 	if (DamageAmount > 0)
 	{
-		if (DamageAmount > 0)
-			UGameplayStatics::PlaySound2D(this, HitSound);
-
+		if (bDash)
+		{
+			CurrentHealth += DamageAmount;
+			return DamageAmount;
+		}
 		if (CurrentHealth <= 0) {
 			Die();
 			AEnemy* enemy = Cast<AEnemy>(DamageCauser);
@@ -430,7 +525,12 @@ float AMain::TakeDamage(float DamageAmount, FDamageEvent const & DamageEvent, AC
 			{
 				enemy->bHasValidTarget = false;
 			}
+			return DamageAmount;
 		}
+
+		if (DamageAmount > 0)
+			UGameplayStatics::PlaySound2D(this, HitSound);
+
 	}
 	else if (DamageAmount < 0)
 	{
@@ -443,5 +543,58 @@ float AMain::TakeDamage(float DamageAmount, FDamageEvent const & DamageEvent, AC
 	}
 
 	return DamageAmount;
+}
+
+void AMain::SwitchLevel(FName LevelName)
+{
+	UWorld* world = GetWorld();
+
+	if (world)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SLF"));
+		FString currentLevel = world->GetMapName();
+		FName currentLevelName(*currentLevel);
+		if (currentLevelName != LevelName)
+		{
+			UGameplayStatics::OpenLevel(world, LevelName);
+		}
+	}
+}
+
+void AMain::SaveGame()
+{
+	UMySaveGame* saveGameInstance = Cast<UMySaveGame>(UGameplayStatics::CreateSaveGameObject(UMySaveGame::StaticClass()));
+
+	saveGameInstance->CharacterStats.Health = CurrentHealth;
+	saveGameInstance->CharacterStats.MaxHealth = MaxHealth;
+	saveGameInstance->CharacterStats.Stamina = CurrentStamina;
+	saveGameInstance->CharacterStats.MaxStamina = MaxStamina;
+	saveGameInstance->CharacterStats.coins = Coins;
+
+	saveGameInstance->CharacterStats.Location = GetActorLocation();
+	saveGameInstance->CharacterStats.Rotation = GetActorRotation();
+
+	UGameplayStatics::SaveGameToSlot(saveGameInstance, saveGameInstance->PlayerName, saveGameInstance->UserIdx);
+
+}
+
+void AMain::LoadGame(bool SetPosition)
+{
+	UMySaveGame* loadGameInstance = Cast<UMySaveGame>(UGameplayStatics::CreateSaveGameObject(UMySaveGame::StaticClass()));
+
+	loadGameInstance = Cast<UMySaveGame>(UGameplayStatics::LoadGameFromSlot(loadGameInstance->PlayerName, loadGameInstance->UserIdx));
+
+	CurrentHealth = loadGameInstance->CharacterStats.Health;
+	MaxHealth = loadGameInstance->CharacterStats.MaxHealth;
+	CurrentStamina = loadGameInstance->CharacterStats.Stamina;
+	MaxStamina = loadGameInstance->CharacterStats.MaxStamina;
+	Coins = loadGameInstance->CharacterStats.coins;
+
+	if (SetPosition)
+	{
+		SetActorLocation(loadGameInstance->CharacterStats.Location);
+		SetActorRotation(loadGameInstance->CharacterStats.Rotation);
+	}
+
 }
 
